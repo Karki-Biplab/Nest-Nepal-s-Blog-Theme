@@ -1,0 +1,90 @@
+/* Header Styles - Enhanced Professional Design */
+.site-header {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border-bottom: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.08);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    min-height: 60px;
+}
+
+.site-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.site-logo-image img {
+    max-height: 40px;
+    width: auto;
+    border-radius: 6px;
+}
+
+.site-branding {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.site-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #1a202c;
+    text-decoration: none;
+    letter-spacing: -0.02em;
+    margin: 0;
+    line-height: 1.2;
+    transition: color 0.3s ease;
+}
+
+.site-title a {
+    color: inherit;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.site-title a:hover {
+    color: #3182ce;
+}
+
+.site-tagline {
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 400;
+    margin: 0;
+    line-height: 1.3;
+    opacity: 0.8;
+    display: none;
+}
+
+@media (min-width: 640px) {
+    .site-tagline {
+        display: block;
+    }
+}
+
+.site-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(49, 130, 206, 0.3) 50%, transparent 100%);
+}
+
+@media (min-width: 1024px) {
+    .header-content {
+        padding: 0.875rem 0;
+    }
+}

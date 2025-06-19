@@ -1,0 +1,47 @@
+/* Utilities */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+
+.mb-0 { margin-bottom: 0; }
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+.mb-3 { margin-bottom: 1.5rem; }
+.mb-4 { margin-bottom: 2rem; }
+
+/* Additional polish */
+.site-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(49, 130, 206, 0.3) 50%, transparent 100%);
+}
+
+/* Smooth scroll behavior when navigating */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Focus styles for accessibility */
+.main-navigation a:focus,
+.mobile-menu-toggle:focus,
+.site-title a:focus {
+    outline: 2px solid #3182ce;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
