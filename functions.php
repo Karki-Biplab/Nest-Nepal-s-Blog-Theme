@@ -207,6 +207,23 @@ function nest_nepal_scripts() {
 
     // TOC smooth scrolling and code copy functionality
     wp_enqueue_script('nest-nepal-enhancements', get_template_directory_uri() . '/js/enhancements.js', ['jquery'], '1.0.0', true);
+
+    // Enqueue single post scripts only on single posts
+    if (is_single()) {
+        wp_enqueue_script(
+            'nest-nepal-single', 
+            get_template_directory_uri() . '/js/single.js', 
+            array('jquery'), 
+            '1.0.0', 
+            true
+        );
+        
+        // Localize script for AJAX/translations if needed
+        wp_localize_script('nest-nepal-single', 'nestNepal', array(
+            'ajaxurl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('nest-nepal-nonce')
+        ));
+    }
 }
 add_action('wp_enqueue_scripts', 'nest_nepal_scripts');
 
@@ -241,7 +258,7 @@ function nest_nepal_widgets_init() {
         'before_widget' => '<section id="%1$s" class="widget %2$s">',
         'after_widget'  => '</section>',
         'before_title'  => '<h3 class="widget-title">',
-        'after_title'   => '</h3>',
+        'after_title'   =>'</h3>',
     ]);
 
     register_sidebar([
@@ -406,4 +423,3 @@ function nest_nepal_optimize() {
     remove_action('admin_print_styles', 'print_emoji_styles');
 }
 add_action('init', 'nest_nepal_optimize');
-?>
