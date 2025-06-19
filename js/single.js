@@ -1,436 +1,689 @@
-/**
- * Enhanced JavaScript for Nest Nepal Theme - Single Post Features
- */
+const BlogReader = {
+    state: {
+        tocVisible: false,
+        readingProgress: 0,
+        currentSection: null,
+        isScrolling: false,
+        tocData: [],
+        estimatedReadingTime: 0
+    },
+    
+    cache: {
+        elements: {},
+        headings: [],
+        tocLinks: []
+    },
+    
+    config: {
+        headerOffset: 80,
+        scrollThrottle: 16,
+        debounceDelay: 300,
+        animationDuration: 300
+    }
+};
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize all features
+    console.log('🚀 Initializing Blog Reader...');
+    
+    cacheElements();
+    
     initFloatingTOC();
-    initReadingProgress(); // Assuming this is for the top reading line and is working fine
+    initReadingProgress();
     initSmoothScrolling();
     initCodeCopyButtons();
     initShareButtons();
     initPostNavigation();
-    generateTOC(); // Call the TOC generation
+    initKeyboardNavigation();
+    initLazyLoading();
+    initScrollToTop();
+    
+    generateTOC();
+    
+    calculateReadingTime();
+    
+    console.log('✅ Blog Reader initialized successfully');
 });
 
-/**
- * Global function to toggle TOC visibility (used by HTML button)
- */
-function toggleTOC() {
-    const floatingTOC = document.getElementById('floating-toc');
-    const tocToggle = document.querySelector('.toc-toggle');
-
-    if (!floatingTOC || !tocToggle) return;
-
-    floatingTOC.classList.toggle('toc-visible');
-    tocToggle.classList.toggle('active');
-    tocToggle.setAttribute('aria-expanded', floatingTOC.classList.contains('toc-visible'));
-
-    // Prevent body scrolling when TOC is open on mobile
-    if (floatingTOC.classList.contains('toc-visible') && window.innerWidth <= 768) {
-        document.body.style.overflow = 'hidden';
-    } else {
-        document.body.style.overflow = '';
+function cacheElements() {
+    const elements = BlogReader.cache.elements;
+    
+    elements.floatingTOC = document.getElementById('floating-toc');
+    elements.tocToggle = document.querySelector('.toc-toggle');
+    elements.tocClose = document.querySelector('.toc-close');
+    elements.tocContent = document.querySelector('.toc-content');
+    elements.tocList = document.getElementById('toc-list');
+    elements.progressBar = document.querySelector('.progress-bar, .reading-progress-bar');
+    elements.postContent = document.querySelector('.post-content, .entry-content');
+    elements.shareButtons = document.querySelectorAll('.share-btn');
+    elements.backButton = document.querySelector('.back-button');
+    elements.postTitle = document.querySelector('.post-title');
+    elements.postMeta = document.querySelector('.post-meta');
+    
+    if (!elements.tocList && elements.tocContent) {
+        elements.tocList = document.createElement('ul');
+        elements.tocList.id = 'toc-list';
+        elements.tocContent.appendChild(elements.tocList);
+    }
+    
+    if (!document.querySelector('.scroll-to-top')) {
+        const scrollToTopBtn = document.createElement('button');
+        scrollToTopBtn.className = 'scroll-to-top';
+        scrollToTopBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+            </svg>
+        `;
+        scrollToTopBtn.setAttribute('aria-label', 'Scroll to top');
+        document.body.appendChild(scrollToTopBtn);
+        elements.scrollToTop = scrollToTopBtn;
     }
 }
 
+function toggleTOC() {
+    const { floatingTOC, tocToggle } = BlogReader.cache.elements;
+    
+    if (!floatingTOC || !tocToggle) return;
 
-/**
- * Initialize Floating Table of Contents
- */
-function initFloatingTOC() {
-    const tocToggle = document.querySelector('.toc-toggle');
-    const floatingTOC = document.getElementById('floating-toc');
-    const tocClose = document.querySelector('.toc-close');
+    BlogReader.state.tocVisible = !BlogReader.state.tocVisible;
+    
+    floatingTOC.classList.toggle('toc-visible', BlogReader.state.tocVisible);
+    tocToggle.classList.toggle('active', BlogReader.state.tocVisible);
+    tocToggle.setAttribute('aria-expanded', BlogReader.state.tocVisible);
 
-    if (!tocToggle || !floatingTOC) return;
-
-    // Event listeners
-    // The toggleTOC function is now global and called directly from HTML
-    if (tocClose) tocClose.addEventListener('click', toggleTOC);
-
-    // Close when clicking outside on mobile (when TOC is modal)
-    document.addEventListener('click', (e) => {
-        if (window.innerWidth <= 768 && floatingTOC.classList.contains('toc-visible')) {
-            if (!floatingTOC.contains(e.target) && !tocToggle.contains(e.target)) {
-                toggleTOC();
-            }
+    if (window.innerWidth <= 768) {
+        document.body.style.overflow = BlogReader.state.tocVisible ? 'hidden' : '';
+        
+        if (BlogReader.state.tocVisible) {
+            createBackdrop();
+        } else {
+            removeBackdrop();
         }
-    });
+    }
+    
+    announceToScreenReader(BlogReader.state.tocVisible ? 'Table of contents opened' : 'Table of contents closed');
+}
 
-    // Close TOC if window is resized above mobile breakpoint while TOC is open
+function createBackdrop() {
+    if (document.querySelector('.toc-backdrop')) return;
+    
+    const backdrop = document.createElement('div');
+    backdrop.className = 'toc-backdrop';
+    backdrop.addEventListener('click', toggleTOC);
+    document.body.appendChild(backdrop);
+    
+    requestAnimationFrame(() => {
+        backdrop.style.opacity = '1';
+    });
+}
+
+function removeBackdrop() {
+    const backdrop = document.querySelector('.toc-backdrop');
+    if (backdrop) {
+        backdrop.style.opacity = '0';
+        setTimeout(() => {
+            backdrop.remove();
+        }, BlogReader.config.animationDuration);
+    }
+}
+
+function initFloatingTOC() {
+    const { floatingTOC, tocToggle, tocClose } = BlogReader.cache.elements;
+    
+    if (!tocToggle || !floatingTOC) {
+        console.warn('TOC elements not found');
+        return;
+    }
+
+    if (tocClose) {
+        tocClose.addEventListener('click', toggleTOC);
+    }
+
     let resizeTimer;
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
-            if (window.innerWidth > 768 && floatingTOC.classList.contains('toc-visible')) {
-                toggleTOC(); // Close TOC if it was open on mobile and now is desktop
+            if (window.innerWidth > 768 && BlogReader.state.tocVisible) {
+                toggleTOC();
             }
-        }, 200); // Debounce
+        }, BlogReader.config.debounceDelay);
+    });
+
+    floatingTOC.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            toggleTOC();
+            tocToggle.focus();
+        }
     });
 }
 
-/**
- * Generate Table of Contents dynamically from post content headings.
- */
 function generateTOC() {
-    const entryContent = document.querySelector('.entry-content');
-    const tocList = document.getElementById('toc-list');
-
-    if (!entryContent || !tocList) {
-        console.warn("Could not find .entry-content or #toc-list to generate TOC.");
+    const { postContent, tocList, floatingTOC, tocToggle } = BlogReader.cache.elements;
+    
+    if (!postContent || !tocList) {
+        console.warn('TOC generation failed: Required elements not found');
         return;
     }
 
-    tocList.innerHTML = ''; // Clear existing TOC
-    const headings = entryContent.querySelectorAll('h2, h3, h4'); // Get all headings
-
+    tocList.innerHTML = '';
+    BlogReader.cache.headings = [];
+    BlogReader.cache.tocLinks = [];
+    
+    const headings = postContent.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    
     if (headings.length === 0) {
-        // If no headings, hide the TOC element completely
-        const floatingTOC = document.getElementById('floating-toc');
         if (floatingTOC) floatingTOC.style.display = 'none';
-        const tocToggle = document.querySelector('.toc-toggle');
         if (tocToggle) tocToggle.style.display = 'none';
         return;
     }
 
     let tocHTML = '';
-    let currentH2 = null;
-    let currentH3 = null;
+    let currentLevel = 0;
+    let openLists = [];
 
     headings.forEach((heading, index) => {
-        // Ensure each heading has an ID
-        let id = heading.id || `section-${index + 1}`;
-        // Sanitize the ID if it was empty, or use existing one.
-        // It's good practice to ensure IDs are unique and valid.
         if (!heading.id) {
-            id = sanitizeTitle(heading.textContent);
-            let uniqueId = id;
-            let counter = 1;
-            while (document.getElementById(uniqueId)) {
-                uniqueId = `${id}-${counter}`;
-                counter++;
-            }
-            heading.id = uniqueId;
-            id = uniqueId;
+            heading.id = sanitizeId(heading.textContent) || `heading-${index}`;
         }
 
-        const level = parseInt(heading.tagName.substring(1)); // H2, H3, H4 -> 2, 3, 4
+        const level = parseInt(heading.tagName.substring(1));
+        const title = heading.textContent.trim();
+        
+        BlogReader.cache.headings.push({
+            element: heading,
+            id: heading.id,
+            title: title,
+            level: level
+        });
 
-        if (level === 2) {
-            if (currentH2) {
-                if (currentH3) {
-                    tocHTML += `</ul></li>`; // Close H3 list and H2 list item
-                } else {
-                    tocHTML += `</li>`; // Close previous H2 list item
-                }
+        if (level > currentLevel) {
+            for (let i = currentLevel; i < level; i++) {
+                tocHTML += '<ul class="toc-nested">';
+                openLists.push('</ul>');
             }
-            tocHTML += `<li data-level="h2"><a href="#${id}">${heading.textContent}</a>`;
-            currentH2 = heading;
-            currentH3 = null; // Reset H3 for new H2
-        } else if (level === 3) {
-            if (!currentH2) { // If an H3 appears before an H2, treat it as an H2 for TOC structure
-                 tocHTML += `<li data-level="h2"><a href="#${id}">${heading.textContent}</a>`;
-                 currentH2 = heading;
-                 currentH3 = null;
-            } else if (!currentH3) {
-                tocHTML += `<ul class="toc-nested">`; // Start nested list for H3s
-                tocHTML += `<li data-level="h3"><a href="#${id}">${heading.textContent}</a></li>`;
-                currentH3 = heading;
-            } else {
-                tocHTML += `<li data-level="h3"><a href="#${id}">${heading.textContent}</a></li>`;
-            }
-        } else if (level === 4) {
-             // For H4, we'll nest under H3 if it exists, otherwise H2.
-             // This can be expanded for deeper nesting if needed.
-            if (!currentH3 && currentH2) { // If H4 under H2 directly
-                if (!currentH3) {
-                    tocHTML += `<ul class="toc-nested">`;
-                }
-                tocHTML += `<li data-level="h4"><a href="#${id}">${heading.textContent}</a></li>`;
-            } else if (currentH3) {
-                 if (!currentH3.dataset.hasNestedH4) { // Only open nested list once
-                    tocHTML += `<ul class="toc-nested">`;
-                    currentH3.dataset.hasNestedH4 = true; // Mark that this H3 has nested H4s
-                 }
-                 tocHTML += `<li data-level="h4"><a href="#${id}">${heading.textContent}</a></li>`;
-            } else { // No H2 or H3, treat as H2 for top level
-                 tocHTML += `<li data-level="h2"><a href="#${id}">${heading.textContent}</a>`;
-                 currentH2 = heading;
-                 currentH3 = null;
+        } else if (level < currentLevel) {
+            const levelsToClose = currentLevel - level;
+            for (let i = 0; i < levelsToClose; i++) {
+                tocHTML += openLists.pop() || '';
             }
         }
+
+        tocHTML += `
+            <li data-level="h${level}">
+                <a href="#${heading.id}" class="toc-link" data-heading-id="${heading.id}">
+                    ${escapeHtml(title)}
+                </a>
+            </li>
+        `;
+
+        currentLevel = level;
     });
 
-    // Close any open lists at the end
-    if (currentH2) {
-        if (currentH3 && currentH3.dataset.hasNestedH4) {
-            tocHTML += `</ul></li></ul></li>`;
-        } else if (currentH3) {
-            tocHTML += `</ul></li>`;
-        } else {
-            tocHTML += `</li>`;
-        }
+    while (openLists.length > 0) {
+        tocHTML += openLists.pop();
     }
 
     tocList.innerHTML = tocHTML;
+    
+    BlogReader.cache.tocLinks = tocList.querySelectorAll('.toc-link');
+    
+    BlogReader.cache.tocLinks.forEach(link => {
+        link.addEventListener('click', handleTOCClick);
+    });
 
-    // Add scroll listener for active state
-    window.addEventListener('scroll', throttle(highlightTOCActive, 100)); // Throttle to prevent performance issues
-    highlightTOCActive(); // Call once on load
+    initScrollTracking();
+    
+    console.log(`📋 Generated TOC with ${headings.length} headings`);
 }
 
-/**
- * Highlight active TOC item based on scroll position.
- */
-function highlightTOCActive() {
-    const headings = document.querySelectorAll('.entry-content h2, .entry-content h3, .entry-content h4');
-    const tocLinks = document.querySelectorAll('#toc-list a');
+function handleTOCClick(e) {
+    e.preventDefault();
+    
+    const targetId = e.target.getAttribute('data-heading-id');
+    const targetElement = document.getElementById(targetId);
+    
+    if (targetElement) {
+        scrollToElement(targetElement);
+        
+        if (window.innerWidth <= 768 && BlogReader.state.tocVisible) {
+            setTimeout(() => {
+                toggleTOC();
+            }, 300);
+        }
+        
+        if (history.pushState) {
+            history.pushState(null, null, `#${targetId}`);
+        }
+        
+        announceToScreenReader(`Navigated to ${targetElement.textContent}`);
+    }
+}
+
+function initScrollTracking() {
+    const throttledHighlight = throttle(highlightActiveTOCItem, BlogReader.config.scrollThrottle);
+    
+    window.addEventListener('scroll', throttledHighlight);
+    
+    highlightActiveTOCItem();
+}
+
+function highlightActiveTOCItem() {
+    const headings = BlogReader.cache.headings;
+    const tocLinks = BlogReader.cache.tocLinks;
+    
+    if (!headings.length || !tocLinks.length) return;
+    
     const scrollY = window.pageYOffset || document.documentElement.scrollTop;
-    const headerOffset = 100; // Adjust this value to account for sticky header/nav
-
-    let activeFound = false;
-
+    const headerOffset = BlogReader.config.headerOffset;
+    
+    let activeHeading = null;
+    
     for (let i = headings.length - 1; i >= 0; i--) {
         const heading = headings[i];
-        if (heading.offsetTop - headerOffset <= scrollY) {
-            tocLinks.forEach(link => {
-                link.closest('li').classList.remove('active');
-            });
-
-            const activeLink = document.querySelector(`#toc-list a[href="#${heading.id}"]`);
-            if (activeLink) {
-                activeLink.closest('li').classList.add('active');
-                // Scroll TOC into view if it's a sidebar and active item is out of view
-                if (window.innerWidth > 768) {
-                    const tocContainer = document.getElementById('floating-toc');
-                    const activeListItem = activeLink.closest('li');
-                    if (tocContainer && activeListItem) {
-                        const containerRect = tocContainer.getBoundingClientRect();
-                        const itemRect = activeListItem.getBoundingClientRect();
-
-                        // If item is above or below visible area of TOC container
-                        if (itemRect.top < containerRect.top || itemRect.bottom > containerRect.bottom) {
-                            activeListItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        }
-                    }
-                }
-            }
-            activeFound = true;
+        if (heading.element.offsetTop - headerOffset <= scrollY + 10) {
+            activeHeading = heading;
             break;
         }
     }
+    
+    tocLinks.forEach(link => {
+        const listItem = link.closest('li');
+        if (listItem) {
+            listItem.classList.remove('active');
+        }
+    });
+    
+    if (activeHeading) {
+        const activeLink = document.querySelector(`[data-heading-id="${activeHeading.id}"]`);
+        if (activeLink) {
+            const listItem = activeLink.closest('li');
+            if (listItem) {
+                listItem.classList.add('active');
+                scrollTOCToActiveItem(activeLink);
+            }
+        }
+        
+        BlogReader.state.currentSection = activeHeading.id;
+    }
+}
 
-    if (!activeFound) {
-        // If no heading is active (e.g., at the very top of the page)
-        tocLinks.forEach(link => {
-            link.closest('li').classList.remove('active');
+function scrollTOCToActiveItem(activeLink) {
+    const { floatingTOC } = BlogReader.cache.elements;
+    
+    if (!floatingTOC || window.innerWidth <= 768) return;
+    
+    const tocContainer = floatingTOC.querySelector('.toc-content');
+    if (!tocContainer) return;
+    
+    const containerRect = tocContainer.getBoundingClientRect();
+    const itemRect = activeLink.getBoundingClientRect();
+    
+    if (itemRect.top < containerRect.top || itemRect.bottom > containerRect.bottom) {
+        activeLink.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest'
         });
     }
 }
 
-/**
- * Share Post Functionality
- */
-function sharePost() {
+function initReadingProgress() {
+    const { progressBar } = BlogReader.cache.elements;
+    
+    if (!progressBar) {
+        console.warn('Progress bar element not found');
+        return;
+    }
+    
+    const updateProgress = throttle(() => {
+        const scrollPx = document.documentElement.scrollTop;
+        const winHeightPx = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+        const scrolled = Math.min((scrollPx / winHeightPx) * 100, 100);
+        
+        BlogReader.state.readingProgress = scrolled;
+        progressBar.style.width = `${scrolled}%`;
+        
+        const { scrollToTop } = BlogReader.cache.elements;
+        if (scrollToTop) {
+            scrollToTop.classList.toggle('visible', scrolled > 20);
+        }
+    }, BlogReader.config.scrollThrottle);
+    
+    window.addEventListener('scroll', updateProgress);
+    updateProgress();
+}
+
+function initSmoothScrolling() {
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('a[href^="#"]');
+        if (!link) return;
+        
+        const hash = link.getAttribute('href');
+        if (hash === '#' || hash.length <= 1) return;
+        
+        const targetElement = document.querySelector(hash);
+        if (targetElement) {
+            e.preventDefault();
+            scrollToElement(targetElement);
+            
+            if (history.pushState) {
+                history.pushState(null, null, hash);
+            }
+        }
+    });
+}
+
+function scrollToElement(element) {
+    const headerOffset = BlogReader.config.headerOffset;
+    const elementPosition = element.getBoundingClientRect().top;
+    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+    
+    BlogReader.state.isScrolling = true;
+    
+    window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+    });
+    
+    setTimeout(() => {
+        BlogReader.state.isScrolling = false;
+    }, 1000);
+}
+
+function initCodeCopyButtons() {
+    const codeBlocks = document.querySelectorAll('pre');
+    
+    codeBlocks.forEach((pre, index) => {
+        if (pre.querySelector('.copy-code-button')) return;
+        
+        const code = pre.querySelector('code');
+        if (!code) return;
+        
+        const button = document.createElement('button');
+        button.className = 'copy-code-button';
+        button.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span>Copy</span>
+        `;
+        button.setAttribute('aria-label', `Copy code block ${index + 1}`);
+        
+        button.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(code.textContent);
+                
+                const span = button.querySelector('span');
+                const originalText = span.textContent;
+                span.textContent = 'Copied!';
+                button.classList.add('copied');
+                
+                setTimeout(() => {
+                    span.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+                
+                showNotification('Code copied to clipboard!');
+            } catch (err) {
+                console.error('Failed to copy code:', err);
+                fallbackCopyTextToClipboard(code.textContent);
+            }
+        });
+        
+        pre.appendChild(button);
+    });
+    
+    console.log(`📋 Added copy buttons to ${codeBlocks.length} code blocks`);
+}
+
+function initShareButtons() {
+    const shareButtons = document.querySelectorAll('.share-btn');
+    
+    shareButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            const platform = button.classList.contains('facebook') ? 'facebook' :
+                            button.classList.contains('twitter') ? 'twitter' :
+                            button.classList.contains('linkedin') ? 'linkedin' :
+                            'copy';
+            
+            sharePost(platform);
+        });
+    });
+    
+    const mainShareButton = document.querySelector('.share-button');
+    if (mainShareButton) {
+        mainShareButton.addEventListener('click', () => sharePost('native'));
+    }
+}
+
+function sharePost(platform = 'native') {
     const postTitle = document.title;
     const postUrl = window.location.href;
-
-    if (navigator.share) {
-        navigator.share({
-            title: postTitle,
-            url: postUrl
-        }).then(() => {
-            showNotification('Thanks for sharing!');
-        }).catch((error) => {
-            console.error('Share failed:', error);
-            // Fallback for systems that don't support Web Share API
-            copyLinkToClipboard(postUrl);
-        });
-    } else {
-        // Fallback for browsers that don't support Web Share API
-        copyLinkToClipboard(postUrl);
+    const postDescription = document.querySelector('meta[name="description"]')?.content || '';
+    
+    switch (platform) {
+        case 'native':
+            if (navigator.share) {
+                navigator.share({
+                    title: postTitle,
+                    text: postDescription,
+                    url: postUrl
+                }).then(() => {
+                    showNotification('Thanks for sharing!');
+                }).catch(err => {
+                    console.error('Share failed:', err);
+                    sharePost('copy');
+                });
+            } else {
+                sharePost('copy');
+            }
+            break;
+            
+        case 'facebook':
+            window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(postUrl)}`, '_blank', 'width=600,height=400');
+            break;
+            
+        case 'twitter':
+            window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(postUrl)}&text=${encodeURIComponent(postTitle)}`, '_blank', 'width=600,height=400');
+            break;
+            
+        case 'linkedin':
+            window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(postUrl)}`, '_blank', 'width=600,height=400');
+            break;
+            
+        case 'copy':
+        default:
+            copyToClipboard(postUrl);
+            break;
     }
 }
 
-/**
- * Copy link to clipboard fallback
- */
-function copyLinkToClipboard(text) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => {
-            showNotification('Link copied to clipboard!');
-        }).catch(err => {
-            console.error('Failed to copy: ', err);
-            // Alert as a last resort
-            prompt("Copy this link:", text);
-        });
-    } else {
-        // Deprecated fallback for older browsers
-        const textArea = document.createElement("textarea");
-        textArea.value = text;
-        textArea.style.position = "fixed";  // Avoid scrolling to bottom
-        textArea.style.left = "-9999px";
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        try {
-            document.execCommand('copy');
-            showNotification('Link copied to clipboard!');
-        } catch (err) {
-            console.error('Fallback copy failed:', err);
-            prompt("Copy this link:", text);
+async function copyToClipboard(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+        showNotification('Link copied to clipboard!');
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        fallbackCopyTextToClipboard(text);
+    }
+}
+
+function fallbackCopyTextToClipboard(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    textArea.style.top = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        document.execCommand('copy');
+        showNotification('Link copied to clipboard!');
+    } catch (err) {
+        console.error('Fallback copy failed:', err);
+        showNotification('Copy failed. Please copy manually: ' + text, 'error');
+    }
+    
+    document.body.removeChild(textArea);
+}
+
+function initPostNavigation() {
+    const prevButton = document.querySelector('.nav-previous a');
+    const nextButton = document.querySelector('.nav-next a');
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        
+        switch (e.key) {
+            case 'ArrowLeft':
+                if (prevButton && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    prevButton.click();
+                }
+                break;
+            case 'ArrowRight':
+                if (nextButton && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    nextButton.click();
+                }
+                break;
         }
-        document.body.removeChild(textArea);
+    });
+}
+
+function initKeyboardNavigation() {
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        
+        switch (e.key) {
+            case 't':
+            case 'T':
+                if (!e.ctrlKey && !e.metaKey) {
+                    e.preventDefault();
+                    toggleTOC();
+                }
+                break;
+                
+            case 'Escape':
+                if (BlogReader.state.tocVisible) {
+                    toggleTOC();
+                }
+                break;
+                
+            case 'Home':
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+                break;
+                
+            case 'End':
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                }
+                break;
+        }
+    });
+}
+
+function initLazyLoading() {
+    const images = document.querySelectorAll('img[data-src]');
+    
+    if ('IntersectionObserver' in window) {
+        const imageObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    img.src = img.dataset.src;
+                    img.classList.remove('lazy');
+                    imageObserver.unobserve(img);
+                }
+            });
+        });
+        
+        images.forEach(img => imageObserver.observe(img));
+    } else {
+        images.forEach(img => {
+            img.src = img.dataset.src;
+            img.classList.remove('lazy');
+        });
     }
 }
 
-/**
- * Show notification (retained from original single.js)
- */
-function showNotification(message) {
-    // Create notification element
+function initScrollToTop() {
+    const { scrollToTop } = BlogReader.cache.elements;
+    
+    if (scrollToTop) {
+        scrollToTop.addEventListener('click', () => {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        });
+    }
+}
+
+function calculateReadingTime() {
+    const { postContent } = BlogReader.cache.elements;
+    if (!postContent) return;
+    
+    const text = postContent.textContent || '';
+    const wordsPerMinute = 200;
+    const words = text.trim().split(/\s+/).length;
+    const readingTime = Math.ceil(words / wordsPerMinute);
+    
+    BlogReader.state.estimatedReadingTime = readingTime;
+    
+    const readingTimeElement = document.querySelector('.reading-time');
+    if (readingTimeElement && !readingTimeElement.textContent.includes('min')) {
+        readingTimeElement.textContent = `${readingTime} min read`;
+    }
+}
+
+function showNotification(message, type = 'success') {
+    const existingNotifications = document.querySelectorAll('.notification');
+    existingNotifications.forEach(n => n.remove());
+    
     const notification = document.createElement('div');
-    notification.className = 'notification';
+    notification.className = `notification notification-${type}`;
     notification.textContent = message;
     notification.setAttribute('role', 'alert');
     notification.setAttribute('aria-live', 'polite');
-
-    // Add to page
+    
     document.body.appendChild(notification);
-
-    // Show with animation
-    setTimeout(() => notification.classList.add('show'), 100);
-
-    // Remove after 3 seconds
+    
+    requestAnimationFrame(() => {
+        notification.classList.add('show');
+    });
+    
     setTimeout(() => {
         notification.classList.remove('show');
-        setTimeout(() => document.body.removeChild(notification), 300);
-    }, 3000);
-}
-
-/**
- * Initialize Reading Progress (assuming this is the top line, which is working)
- */
-function initReadingProgress() {
-    const progressBar = document.querySelector('.reading-progress-bar');
-    if (!progressBar) return;
-
-    window.addEventListener('scroll', () => {
-        const scrollPx = document.documentElement.scrollTop;
-        const winHeightPx = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-        const scrolled = (scrollPx / winHeightPx) * 100;
-        progressBar.style.width = `${scrolled}%`;
-    });
-}
-
-/**
- * Smooth Scrolling for Anchor Links (existing, but ensure it works with dynamic TOC)
- */
-function initSmoothScrolling() {
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function(e) {
-            const hash = this.getAttribute('href');
-            if (hash === '#' || hash.length <= 1) return; // Ignore empty or single hash links
-
-            const targetElement = document.querySelector(hash);
-            if (targetElement) {
-                e.preventDefault(); // Prevent default jump
-
-                // Calculate position considering potential fixed header
-                const headerOffset = 80; // Adjust this value to match your sticky header height
-                const elementPosition = targetElement.getBoundingClientRect().top;
-                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-
-                window.scrollTo({
-                    top: offsetPosition,
-                    behavior: "smooth"
-                });
-
-                // Update URL hash without jumping
-                if (history.pushState) {
-                    history.pushState(null, null, hash);
-                } else {
-                    location.hash = hash;
-                }
-
-                // If TOC is open (mobile modal), close it after clicking a link
-                const floatingTOC = document.getElementById('floating-toc');
-                if (floatingTOC && floatingTOC.classList.contains('toc-visible') && window.innerWidth <= 768) {
-                    toggleTOC();
-                }
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
             }
-        });
-    });
+        }, BlogReader.config.animationDuration);
+    }, type === 'error' ? 5000 : 3000);
 }
 
-
-/**
- * Code Copy Buttons (retained from original single.js)
- */
-function initCodeCopyButtons() {
-    document.querySelectorAll('pre').forEach(function(pre) {
-        // Check if a copy button already exists
-        if (pre.previousElementSibling && pre.previousElementSibling.classList.contains('copy-code-button-wrapper')) {
-            return; // Skip if button already added
-        }
-
-        const buttonWrapper = document.createElement('div');
-        buttonWrapper.className = 'copy-code-button-wrapper';
-
-        const button = document.createElement('button');
-        button.className = 'copy-code-button';
-        button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> <span>Copy Code</span>';
-
-        button.addEventListener('click', function() {
-            const code = pre.querySelector('code').textContent;
-            navigator.clipboard.writeText(code).then(function() {
-                button.querySelector('span').textContent = 'Copied!';
-                setTimeout(function() {
-                    button.querySelector('span').textContent = 'Copy Code';
-                }, 2000);
-            }).catch(function(err) {
-                console.error('Failed to copy code: ', err);
-            });
-        });
-
-        buttonWrapper.appendChild(button);
-        pre.parentNode.insertBefore(buttonWrapper, pre);
-    });
+function announceToScreenReader(message) {
+    const announcement = document.createElement('div');
+    announcement.setAttribute('aria-live', 'polite');
+    announcement.setAttribute('aria-atomic', 'true');
+    announcement.className = 'sr-only';
+    announcement.textContent = message;
+    
+    document.body.appendChild(announcement);
+    
+    setTimeout(() => {
+        document.body.removeChild(announcement);
+    }, 1000);
 }
 
-
-/**
- * Initialize Share Buttons (already existing but enhanced)
- */
-function initShareButtons() {
-    // Share button click handler moved to sharePost()
-}
-
-
-/**
- * Initialize Post Navigation (retained from original single.js)
- */
-function initPostNavigation() {
-    // Add any post navigation enhancements here
-    // For example, you could add smooth scrolling to the next/previous posts
-}
-
-
-/**
- * Sanitize title for URL (already existing, ensuring it's global if needed)
- */
-function sanitizeTitle(title) {
-    return title
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '') // Remove non-alphanumeric chars (keep spaces and hyphens)
-        .replace(/\s+/g, '-')        // Replace spaces with hyphens
-        .replace(/-+/g, '-')         // Replace multiple hyphens with a single hyphen
-        .replace(/^-+|-+$/g, '');    // Trim hyphens from start/end
-}
-
-/**
- * Throttle function to limit execution rate of a function.
- */
 function throttle(func, limit) {
     let inThrottle;
     return function() {
@@ -442,4 +695,67 @@ function throttle(func, limit) {
             setTimeout(() => inThrottle = false, limit);
         }
     };
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function() {
+        const context = this;
+        const args = arguments;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), wait);
+    };
+}
+
+function sanitizeId(text) {
+    return text
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+// Add this to your existing JavaScript
+function initReadingProgress() {
+    const { progressBar } = BlogReader.cache.elements;
+    
+    if (!progressBar) return;
+    
+    const updateProgress = throttle(() => {
+        const scrollPx = document.documentElement.scrollTop;
+        const winHeightPx = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+        const scrolled = Math.min((scrollPx / winHeightPx) * 100, 100);
+        
+        BlogReader.state.readingProgress = scrolled;
+        progressBar.style.width = `${scrolled}%`;
+        
+        // Add color change based on progress
+        if (scrolled > 80) {
+            progressBar.style.background = 'linear-gradient(90deg, #3182ce, #805ad5)';
+        } else if (scrolled > 50) {
+            progressBar.style.background = 'linear-gradient(90deg, #3182ce, #4299e1)';
+        } else {
+            progressBar.style.background = 'linear-gradient(90deg, #3182ce, #63b3ed)';
+        }
+    }, BlogReader.config.scrollThrottle);
+    
+    window.addEventListener('scroll', updateProgress);
+    updateProgress();
+}
+
+window.toggleTOC = toggleTOC;
+window.sharePost = sharePost;
+window.shareOnFacebook = () => sharePost('facebook');
+window.shareOnTwitter = () => sharePost('twitter');
+window.shareOnLinkedIn = () => sharePost('linkedin');
+window.copyToClipboard = () => sharePost('copy');
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = BlogReader;
 }

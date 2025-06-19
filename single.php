@@ -1,7 +1,4 @@
 <?php
-/**
- * The template for displaying all single posts - Enhanced with TOC
- */
 get_header();
 ?>
 
@@ -12,7 +9,6 @@ get_header();
             
             <div class="single-post">
                 
-                <!-- Post Navigation Bar -->
                 <div class="post-nav-bar">
                     <a href="<?php echo esc_url(get_permalink(get_option('page_for_posts')) ?: home_url('/blog')); ?>" class="back-button">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -53,7 +49,6 @@ get_header();
 
                 <article id="post-<?php the_ID(); ?>" <?php post_class('blog-post'); ?>>
                     
-                    <!-- Featured Image -->
                     <?php if (has_post_thumbnail()) : ?>
                         <div class="post-featured-image-wrapper">
                             <?php 
@@ -65,9 +60,7 @@ get_header();
                         </div>
                     <?php endif; ?>
 
-                    <!-- Post Header -->
                     <header class="post-header">
-                        <!-- Breadcrumbs -->
                         <nav class="breadcrumbs" aria-label="Breadcrumb">
                             <ol class="breadcrumb-list">
                                 <li><a href="<?php echo home_url('/'); ?>">Home</a></li>
@@ -119,7 +112,6 @@ get_header();
                         </div>
                     </header>
 
-                    <!-- Floating TOC -->
                     <div id="floating-toc" class="floating-toc">
                         <div class="toc-header">
                             <h3>Table of Contents</h3>
@@ -131,11 +123,9 @@ get_header();
                             </button>
                         </div>
                         <div class="toc-content">
-                            <!-- TOC will be populated by JavaScript -->
                         </div>
                     </div>
 
-                    <!-- Post Content -->
                     <div class="post-content">
                         <?php
                         the_content();
@@ -147,9 +137,7 @@ get_header();
                         ?>
                     </div>
 
-                    <!-- Post Footer -->
                     <footer class="post-footer">
-                        <!-- Post Tags -->
                         <?php if (get_the_tags()) : ?>
                             <div class="post-tags">
                                 <h3><?php esc_html_e('Tags:', 'nest-nepal'); ?></h3>
@@ -159,7 +147,6 @@ get_header();
                             </div>
                         <?php endif; ?>
 
-                        <!-- Share Buttons -->
                         <div class="post-share">
                             <h3><?php esc_html_e('Share this article:', 'nest-nepal'); ?></h3>
                             <div class="share-buttons">
@@ -190,7 +177,7 @@ get_header();
 
                 </article>
 
-                <!-- Post Navigation -->
+                <!-- Update the post navigation section -->
                 <nav class="post-navigation" aria-label="Post navigation">
                     <?php
                     $prev_post = get_previous_post();
@@ -203,7 +190,7 @@ get_header();
                                 <a href="<?php echo esc_url(get_permalink($prev_post)); ?>" rel="prev">
                                     <div class="nav-direction">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"></path>
                                         </svg>
                                         <span class="nav-subtitle"><?php esc_html_e('Previous Post', 'nest-nepal'); ?></span>
                                     </div>
@@ -218,7 +205,7 @@ get_header();
                                     <div class="nav-direction">
                                         <span class="nav-subtitle"><?php esc_html_e('Next Post', 'nest-nepal'); ?></span>
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7"></path>
                                         </svg>
                                     </div>
                                     <span class="nav-title"><?php echo esc_html(get_the_title($next_post)); ?></span>
@@ -228,7 +215,6 @@ get_header();
                     </div>
                 </nav>
 
-                <!-- Related Posts -->
                 <?php
                 $categories = get_the_category();
                 if ($categories) {
@@ -271,7 +257,6 @@ get_header();
                 }
                 ?>
 
-                <!-- Comments Section -->
                 <?php
                 if (comments_open() || get_comments_number()) :
                     comments_template();

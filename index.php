@@ -100,17 +100,9 @@ get_header(); ?>
 
                         <div class="blog-card-content">
                             
-                            <div class="blog-card-meta">
-                                <time datetime="<?php echo esc_attr(get_the_date('c')); ?>" class="blog-card-date">
-                                    <?php echo get_the_date('M j, Y'); ?>
-                                </time>
-                                
-                                <?php if (get_the_author()) : ?>
-                                    <span class="blog-card-author">
-                                        By <?php the_author(); ?>
-                                    </span>
-                                <?php endif; ?>
-                            </div>
+                            <time datetime="<?php echo esc_attr(get_the_date('c')); ?>" class="blog-card-date">
+                                <?php echo get_the_date('M j, Y'); ?>
+                            </time>
 
                             <h2 class="blog-card-title">
                                 <a href="<?php the_permalink(); ?>" rel="bookmark">
@@ -128,14 +120,11 @@ get_header(); ?>
                                 ?>
                             </div>
 
+                            <?php if (get_the_author()) : ?>
+                                <span class="blog-card-author">By <?php the_author(); ?></span>
+                            <?php endif; ?>
+
                             <div class="blog-card-footer">
-                                <a href="<?php the_permalink(); ?>" class="read-more">
-                                    Read Article
-                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="read-more-icon">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
-                                    </svg>
-                                </a>
-                                
                                 <?php if (get_the_tags()) : ?>
                                     <div class="blog-card-tags">
                                         <?php 
