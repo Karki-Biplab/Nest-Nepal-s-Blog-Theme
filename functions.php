@@ -1,6 +1,6 @@
 <?php
 /**
- * Nest Nepal Theme Functions
+ * Nest Nepal Theme Functions - Enhanced Version
  *
  * @package Nest_Nepal
  */
@@ -71,12 +71,132 @@ function nest_nepal_setup() {
 add_action('after_setup_theme', 'nest_nepal_setup');
 
 /**
+ * Custom Image Sizes - Hostinger Style
+ */
+function nest_nepal_custom_image_sizes() {
+    // Blog card image - perfect for grid layout
+    add_image_size('blog-card', 400, 240, true);
+    
+    // Featured image for single posts
+    add_image_size('post-featured', 1200, 600, true);
+    
+    // Thumbnail for related posts
+    add_image_size('post-thumbnail-small', 300, 180, true);
+    
+    // Medium size for content
+    add_image_size('content-medium', 800, 450, true);
+}
+add_action('after_setup_theme', 'nest_nepal_custom_image_sizes');
+
+/**
+ * Set posts per page to 9
+ */
+function nest_nepal_posts_per_page($query) {
+    if (!is_admin() && $query->is_main_query()) {
+        if (is_home() || is_category() || is_tag()) {
+            $query->set('posts_per_page', 9);
+        }
+    }
+}
+add_action('pre_get_posts', 'nest_nepal_posts_per_page');
+
+/**
+ * Table of Contents Generator
+ */
+function nest_nepal_generate_toc($content) {
+    // Only add TOC to single posts
+    if (!is_single()) {
+        return $content;
+    }
+
+    // Extract headings
+    preg_match_all('/<h([2-6])[^>]*>(.*?)<\/h[2-6]>/i', $content, $matches);
+    
+    if (empty($matches[0])) {
+        return $content;
+    }
+
+    $toc = '<div class="table-of-contents">';
+    $toc .= '<h3 class="toc-title">Table of Contents</h3>';
+    $toc .= '<ul class="toc-list">';
+    
+    foreach ($matches[0] as $index => $heading) {
+        $level = $matches[1][$index];
+        $title = strip_tags($matches[2][$index]);
+        $anchor = sanitize_title($title) . '-' . $index;
+        
+        // Add ID to the original heading
+        $content = str_replace($heading, str_replace('>', ' id="' . $anchor . '">', $heading), $content);
+        
+        $toc .= '<li class="toc-level-' . $level . '">';
+        $toc .= '<a href="#' . $anchor . '">' . $title . '</a>';
+        $toc .= '</li>';
+    }
+    
+    $toc .= '</ul></div>';
+    
+    // Insert TOC after first paragraph
+    $content = preg_replace('/(<p>.*?<\/p>)/', '$1' . $toc, $content, 1);
+    
+    return $content;
+}
+add_filter('the_content', 'nest_nepal_generate_toc');
+
+/**
+ * Enhanced Code Block Styling
+ */
+function nest_nepal_enhance_code_blocks($content) {
+    // Wrap code blocks in special containers
+    $content = preg_replace_callback(
+        '/<pre><code([^>]*)>(.*?)<\/code><\/pre>/s',
+        function($matches) {
+            $attributes = $matches[1];
+            $code = $matches[2];
+            
+            // Extract language if present
+            $language = '';
+            if (preg_match('/class="[^"]*language-([^"\s]+)/', $attributes, $lang_match)) {
+                $language = $lang_match[1];
+            }
+            
+            $output = '<div class="code-block-container">';
+            if ($language) {
+                $output .= '<div class="code-language">' . strtoupper($language) . '</div>';
+            }
+            $output .= '<div class="code-actions">';
+            $output .= '<button class="copy-code-btn" onclick="copyCode(this)">Copy</button>';
+            $output .= '</div>';
+            $output .= '<pre class="code-block"><code' . $attributes . '>' . $code . '</code></pre>';
+            $output .= '</div>';
+            
+            return $output;
+        },
+        $content
+    );
+    
+    // Also handle inline code
+    $content = preg_replace(
+        '/<code([^>]*)>(.*?)<\/code>/',
+        '<code class="inline-code"$1>$2</code>',
+        $content
+    );
+    
+    return $content;
+}
+add_filter('the_content', 'nest_nepal_enhance_code_blocks', 20);
+
+/**
  * Enqueue scripts and styles
  */
 function nest_nepal_scripts() {
     // Enqueue main stylesheet
-    wp_enqueue_style('nest-nepal-style', get_stylesheet_uri(), [], '1.0.0');
-
+    wp_enqueue_style('nest-nepal-style', get_stylesheet_uri(), [], '1.2.0');
+    
+    // Enqueue Prism.js for syntax highlighting
+    wp_enqueue_style('prism-css', 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css', [], '1.29.0');
+    wp_enqueue_script('prism-js', 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js', [], '1.29.0', true);
+    wp_enqueue_script('prism-autoloader', 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js', ['prism-js'], '1.29.0', true);
+    
     // Enqueue navigation script
     wp_enqueue_script('nest-nepal-navigation', get_template_directory_uri() . '/js/navigation.js', [], '1.0.0', true);
 
@@ -85,8 +205,8 @@ function nest_nepal_scripts() {
         wp_enqueue_script('comment-reply');
     }
 
-    // Add smooth scrolling for anchor links
-    wp_enqueue_script('nest-nepal-smooth-scroll', get_template_directory_uri() . '/js/smooth-scroll.js', [], '1.0.0', true);
+    // TOC smooth scrolling and code copy functionality
+    wp_enqueue_script('nest-nepal-enhancements', get_template_directory_uri() . '/js/enhancements.js', ['jquery'], '1.0.0', true);
 }
 add_action('wp_enqueue_scripts', 'nest_nepal_scripts');
 
@@ -151,15 +271,6 @@ function nest_nepal_excerpt_more($more) {
     return '...';
 }
 add_filter('excerpt_more', 'nest_nepal_excerpt_more');
-
-/**
- * Add custom image sizes
- */
-function nest_nepal_custom_image_sizes() {
-    add_image_size('nest-nepal-featured', 800, 400, true);
-    add_image_size('nest-nepal-blog-card', 400, 250, true);
-}
-add_action('after_setup_theme', 'nest_nepal_custom_image_sizes');
 
 /**
  * Customize the read more link
@@ -261,215 +372,13 @@ function nest_nepal_sanitize_checkbox($checked) {
 }
 
 /**
- * Add custom CSS for better styling
+ * Add Reading Time Estimation
  */
-function nest_nepal_custom_css() {
-    ?>
-    <style type="text/css">
-        /* Mobile Menu Styles */
-        .mobile-menu {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 9999;
-        }
-
-        .mobile-menu.active {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .mobile-menu-content {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 400px;
-        }
-
-        .mobile-menu ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .mobile-menu li {
-            margin-bottom: 1rem;
-        }
-
-        .mobile-menu a {
-            display: block;
-            padding: 1rem;
-            color: #2d3748;
-            font-weight: 600;
-            text-decoration: none;
-            border-radius: 6px;
-            transition: all 0.3s ease;
-        }
-
-        .mobile-menu a:hover {
-            background: #f7fafc;
-            color: #3182ce;
-        }
-
-        /* Hamburger Menu */
-        .hamburger {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .hamburger span {
-            display: block;
-            width: 25px;
-            height: 3px;
-            background: #4a5568;
-            transition: all 0.3s ease;
-        }
-
-        .mobile-menu-toggle[aria-expanded="true"] .hamburger span:nth-child(1) {
-            transform: rotate(45deg) translate(5px, 5px);
-        }
-
-        .mobile-menu-toggle[aria-expanded="true"] .hamburger span:nth-child(2) {
-            opacity: 0;
-        }
-
-        .mobile-menu-toggle[aria-expanded="true"] .hamburger span:nth-child(3) {
-            transform: rotate(-45deg) translate(7px, -6px);
-        }
-
-        /* Post Navigation Styles */
-        .post-navigation {
-            margin: 3rem 0;
-            padding: 2rem 0;
-            border-top: 1px solid #e2e8f0;
-        }
-
-        .nav-links {
-            display: flex;
-            justify-content: space-between;
-            gap: 2rem;
-        }
-
-        .nav-previous,
-        .nav-next {
-            flex: 1;
-        }
-
-        .nav-next {
-            text-align: right;
-        }
-
-        .nav-links a {
-            display: block;
-            padding: 1rem;
-            background: #f7fafc;
-            border-radius: 8px;
-            text-decoration: none;
-            transition: all 0.3s ease;
-        }
-
-        .nav-links a:hover {
-            background: #edf2f7;
-            transform: translateY(-2px);
-        }
-
-        .nav-subtitle {
-            display: block;
-            font-size: 0.875rem;
-            color: #718096;
-            margin-bottom: 0.5rem;
-        }
-
-        .nav-title {
-            display: block;
-            font-weight: 600;
-            color: #2d3748;
-        }
-
-        /* Post Tags */
-        .post-tags {
-            margin: 2rem 0;
-            padding: 1.5rem;
-            background: #f7fafc;
-            border-radius: 8px;
-        }
-
-        .post-tags h3 {
-            margin-bottom: 1rem;
-            font-size: 1rem;
-            color: #2d3748;
-        }
-
-        .post-tags a {
-            display: inline-block;
-            padding: 0.5rem 1rem;
-            background: #3182ce;
-            color: white;
-            text-decoration: none;
-            border-radius: 20px;
-            font-size: 0.875rem;
-            margin: 0.25rem;
-            transition: all 0.3s ease;
-        }
-
-        .post-tags a:hover {
-            background: #2c5282;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 767px) {
-            .nav-links {
-                flex-direction: column;
-            }
-            
-            .nav-next {
-                text-align: left;
-            }
-        }
-    </style>
-    <?php
+function nest_nepal_reading_time($content) {
+    $word_count = str_word_count(strip_tags($content));
+    $reading_time = ceil($word_count / 200); // 200 words per minute
+    return $reading_time;
 }
-add_action('wp_head', 'nest_nepal_custom_css');
-
-/**
- * Add theme support for block editor
- */
-function nest_nepal_gutenberg_support() {
-    // Add support for wide and full alignment
-    add_theme_support('align-wide');
-
-    // Add support for custom color palette
-    add_theme_support('editor-color-palette', [
-        [
-            'name'  => esc_html__('Primary Blue', 'nest-nepal'),
-            'slug'  => 'primary-blue',
-            'color' => '#3182ce',
-        ],
-        [
-            'name'  => esc_html__('Dark Blue', 'nest-nepal'),
-            'slug'  => 'dark-blue',
-            'color' => '#2c5282',
-        ],
-        [
-            'name'  => esc_html__('Dark Gray', 'nest-nepal'),
-            'slug'  => 'dark-gray',
-            'color' => '#2d3748',
-        ],
-        [
-            'name'  => esc_html__('Light Gray', 'nest-nepal'),
-            'slug'  => 'light-gray',
-            'color' => '#f7fafc',
-        ],
-    ]);
-}
-add_action('after_setup_theme', 'nest_nepal_gutenberg_support');
 
 /**
  * Security enhancements
